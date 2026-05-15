@@ -44,7 +44,6 @@ use uv_settings::PythonInstallMirrors;
 use uv_static::EnvVars;
 use uv_torch::{TorchSource, TorchStrategy};
 use uv_types::{BuildIsolation, EmptyInstalledPackages, HashStrategy, SourceTreeEditablePolicy};
-use uv_virtualenv::remove_virtualenv;
 use uv_warnings::{warn_user, warn_user_once};
 use uv_workspace::dependency_groups::DependencyGroupError;
 use uv_workspace::pyproject::{ExtraBuildDependency, PyProjectToml};
@@ -1508,7 +1507,7 @@ impl ProjectEnvironment {
 
                 // Remove the existing virtual environment if it doesn't meet the requirements.
                 if replace {
-                    match remove_virtualenv(&root) {
+                    match uv_fs::remove_virtualenv(&root) {
                         Ok(()) => {
                             writeln!(
                                 printer.stderr(),
@@ -1516,9 +1515,8 @@ impl ProjectEnvironment {
                                 root.user_display().cyan()
                             )?;
                         }
-                        Err(uv_virtualenv::Error::Io(err))
-                            if err.kind() == std::io::ErrorKind::NotFound => {}
-                        Err(err) => return Err(err.into()),
+                        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(err) => return Err(uv_virtualenv::Error::from(err).into()),
                     }
                 }
 
@@ -1700,7 +1698,7 @@ impl ScriptEnvironment {
                 }
 
                 // Remove the existing virtual environment.
-                let replaced = match remove_virtualenv(&root) {
+                let replaced = match uv_fs::remove_virtualenv(&root) {
                     Ok(()) => {
                         debug!(
                             "Removed virtual environment at: {}",
@@ -1708,12 +1706,8 @@ impl ScriptEnvironment {
                         );
                         true
                     }
-                    Err(uv_virtualenv::Error::Io(err))
-                        if err.kind() == std::io::ErrorKind::NotFound =>
-                    {
-                        false
-                    }
-                    Err(err) => return Err(err.into()),
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => false,
+                    Err(err) => return Err(uv_virtualenv::Error::from(err).into()),
                 };
 
                 debug!(
